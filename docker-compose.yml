@@ -1,0 +1,8 @@
+services:
+  health-insights-api:
+    build: .
+    container_name: health-insights-api
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
