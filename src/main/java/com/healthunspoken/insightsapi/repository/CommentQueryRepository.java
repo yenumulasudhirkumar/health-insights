@@ -238,7 +238,7 @@ public class CommentQueryRepository {
           """
           and c.text like '%?%'
           and char_length(c.text) between 40 and 350
-          and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course'
+          and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course|google it|blueprint|one off guide|minus the hard work|heard some .*things|got .*results|kudos|lovely video|forgive me|apologies for|subliminal|what lockdown|fearmongery|how can i follow'
           and lower(c.text) not regexp 'population control|they hide|hidden cure|cancer industry|big pharma|government agenda|fake science|conspiracy'
           and lower(c.text) regexp 'pain|symptom|disease|diagnos|treatment|medicine|test|report|normal|safe|dangerous|worry|cause|cure|permanent|come back|eat|food|diet|protein|sugar|bp|thyroid|cholesterol|cancer|heart|liver|kidney|stomach|gut|hair|skin|teeth|tongue|sleep|tired|fatigue|anxiety|stress|pregnancy|period|urine|sweat|vomit|gas|acidity|constipation'
           """;
