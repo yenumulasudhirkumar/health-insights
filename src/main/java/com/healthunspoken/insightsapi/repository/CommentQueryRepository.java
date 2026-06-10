@@ -66,6 +66,34 @@ public class CommentQueryRepository {
         .toList();
   }
 
+  public List<CommentRow> findRelevantHealthQuestionsByFetchedDate(
+      LocalDate dateIst, CommentDatabase database, int limit) {
+    LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
+    LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
+
+    List<String> databases = databasesFor(database);
+    int perDatabaseLimit = Math.max(1, limit);
+    List<CommentRow> rows = new ArrayList<>();
+
+    for (String databaseName : databases) {
+      rows.addAll(
+          queryFetchedRows(
+              databaseName,
+              startUtc,
+              endUtc,
+              perDatabaseLimit,
+              QuestionFilter.RELEVANT_HEALTH_QUESTIONS,
+              SortMode.RECENT));
+    }
+
+    return rows.stream()
+        .sorted(
+            (left, right) ->
+                nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
+        .limit(limit)
+        .toList();
+  }
+
   public List<CommentRow> findTopQuestionCandidates(
       LocalDate dateIst, CommentDatabase database, int limit) {
     LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
@@ -74,7 +102,13 @@ public class CommentQueryRepository {
     List<CommentRow> rows = new ArrayList<>();
     for (String databaseName : databasesFor(database)) {
       rows.addAll(
-          queryFetchedRows(databaseName, startUtc, endUtc, Math.max(100, limit), true, SortMode.TOP_LIKED));
+          queryFetchedRows(
+              databaseName,
+              startUtc,
+              endUtc,
+              Math.max(100, limit),
+              QuestionFilter.QUESTION_CANDIDATES,
+              SortMode.TOP_LIKED));
     }
 
     return rows.stream()
@@ -90,26 +124,29 @@ public class CommentQueryRepository {
       int limit,
       boolean questionOnly,
       SortMode sortMode) {
+    return queryFetchedRows(
+        databaseName,
+        startUtc,
+        endUtc,
+        limit,
+        questionOnly ? QuestionFilter.QUESTION_CANDIDATES : QuestionFilter.NONE,
+        sortMode);
+  }
+
+  private List<CommentRow> queryFetchedRows(
+      String databaseName,
+      LocalDateTime startUtc,
+      LocalDateTime endUtc,
+      int limit,
+      QuestionFilter questionFilter,
+      SortMode sortMode) {
     String safeDatabase = safeIdentifier(databaseName);
     String orderBy =
         switch (sortMode) {
           case RECENT -> "c.fetched_at desc";
           case TOP_LIKED -> "c.like_count desc, c.fetched_at desc";
         };
-    String questionWhere =
-        questionOnly
-            ? """
-              and (
-                c.text like '%?%'
-                or lower(c.text) like '%what%'
-                or lower(c.text) like '%why%'
-                or lower(c.text) like '%how%'
-                or lower(c.text) like '%can %'
-                or lower(c.text) like '%should%'
-                or lower(c.text) like '%is it%'
-              )
-              """
-            : "";
+    String questionWhere = questionWhere(questionFilter);
 
     String sql =
         """
@@ -182,8 +219,40 @@ public class CommentQueryRepository {
     return value == null ? LocalDateTime.MIN : value;
   }
 
+  private String questionWhere(QuestionFilter questionFilter) {
+    return switch (questionFilter) {
+      case NONE -> "";
+      case QUESTION_CANDIDATES ->
+          """
+          and (
+            c.text like '%?%'
+            or lower(c.text) like '%what%'
+            or lower(c.text) like '%why%'
+            or lower(c.text) like '%how%'
+            or lower(c.text) like '%can %'
+            or lower(c.text) like '%should%'
+            or lower(c.text) like '%is it%'
+          )
+          """;
+      case RELEVANT_HEALTH_QUESTIONS ->
+          """
+          and c.text like '%?%'
+          and char_length(c.text) between 40 and 350
+          and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment'
+          and lower(c.text) not regexp 'population control|they hide|hidden cure|cancer industry|big pharma|government agenda|fake science|conspiracy'
+          and lower(c.text) regexp 'pain|symptom|disease|diagnos|treatment|medicine|doctor|test|report|normal|safe|dangerous|worry|cause|cure|permanent|come back|eat|food|diet|protein|sugar|bp|thyroid|cholesterol|cancer|heart|liver|kidney|stomach|gut|hair|skin|teeth|tongue|sleep|tired|fatigue|anxiety|stress|pregnancy|period|urine|sweat|vomit|gas|acidity|constipation'
+          """;
+    };
+  }
+
   private enum SortMode {
     RECENT,
     TOP_LIKED
+  }
+
+  private enum QuestionFilter {
+    NONE,
+    QUESTION_CANDIDATES,
+    RELEVANT_HEALTH_QUESTIONS
   }
 }

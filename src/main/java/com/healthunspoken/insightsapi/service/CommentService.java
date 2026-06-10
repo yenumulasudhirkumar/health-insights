@@ -34,6 +34,12 @@ public class CommentService {
     return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
   }
 
+  public CommentsResponse relevantQuestions(LocalDate date, CommentDatabase database, int limit) {
+    int safeLimit = clampLimit(limit);
+    var rows = repository.findRelevantHealthQuestionsByFetchedDate(date, database, safeLimit);
+    return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
+  }
+
   public CommentsResponse topQuestions(LocalDate date, CommentDatabase database, int limit) {
     int safeLimit = clampLimit(limit);
     var rows = repository.findTopQuestionCandidates(date, database, safeLimit);
