@@ -36,11 +36,32 @@ public class CommentQueryRepository {
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
-      rows.addAll(queryFetchedRows(databaseName, startUtc, endUtc, perDatabaseLimit, false));
+      rows.addAll(
+          queryFetchedRows(databaseName, startUtc, endUtc, perDatabaseLimit, false, SortMode.TOP_LIKED));
     }
 
     return rows.stream()
         .sorted((left, right) -> nullSafeLong(right.likeCount()).compareTo(nullSafeLong(left.likeCount())))
+        .limit(limit)
+        .toList();
+  }
+
+  public List<CommentRow> findRecentByFetchedDate(LocalDate dateIst, CommentDatabase database, int limit) {
+    LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
+    LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
+
+    List<String> databases = databasesFor(database);
+    int perDatabaseLimit = Math.max(1, limit);
+    List<CommentRow> rows = new ArrayList<>();
+
+    for (String databaseName : databases) {
+      rows.addAll(queryFetchedRows(databaseName, startUtc, endUtc, perDatabaseLimit, false, SortMode.RECENT));
+    }
+
+    return rows.stream()
+        .sorted(
+            (left, right) ->
+                nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
         .limit(limit)
         .toList();
   }
@@ -52,7 +73,8 @@ public class CommentQueryRepository {
 
     List<CommentRow> rows = new ArrayList<>();
     for (String databaseName : databasesFor(database)) {
-      rows.addAll(queryFetchedRows(databaseName, startUtc, endUtc, Math.max(100, limit), true));
+      rows.addAll(
+          queryFetchedRows(databaseName, startUtc, endUtc, Math.max(100, limit), true, SortMode.TOP_LIKED));
     }
 
     return rows.stream()
@@ -66,8 +88,14 @@ public class CommentQueryRepository {
       LocalDateTime startUtc,
       LocalDateTime endUtc,
       int limit,
-      boolean questionOnly) {
+      boolean questionOnly,
+      SortMode sortMode) {
     String safeDatabase = safeIdentifier(databaseName);
+    String orderBy =
+        switch (sortMode) {
+          case RECENT -> "c.fetched_at desc";
+          case TOP_LIKED -> "c.like_count desc, c.fetched_at desc";
+        };
     String questionWhere =
         questionOnly
             ? """
@@ -105,10 +133,10 @@ public class CommentQueryRepository {
           and c.text is not null
           and char_length(trim(c.text)) >= 20
           %s
-        order by c.like_count desc, c.fetched_at desc
+        order by %s
         limit ?
         """
-            .formatted(safeDatabase, safeDatabase, safeDatabase, questionWhere);
+            .formatted(safeDatabase, safeDatabase, safeDatabase, questionWhere, orderBy);
 
     return jdbcTemplate.query(
         sql,
@@ -148,5 +176,14 @@ public class CommentQueryRepository {
 
   private Long nullSafeLong(Long value) {
     return value == null ? 0L : value;
+  }
+
+  private LocalDateTime nullSafeDate(LocalDateTime value) {
+    return value == null ? LocalDateTime.MIN : value;
+  }
+
+  private enum SortMode {
+    RECENT,
+    TOP_LIKED
   }
 }

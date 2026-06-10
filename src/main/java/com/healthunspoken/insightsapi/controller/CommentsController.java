@@ -35,6 +35,14 @@ public class CommentsController {
     return commentService.byDate(date, CommentDatabase.from(database), limit);
   }
 
+  @GetMapping("/recent")
+  public CommentsResponse recent(
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+      @RequestParam(defaultValue = "both") String database,
+      @RequestParam(defaultValue = "100") int limit) {
+    return commentService.recent(date, CommentDatabase.from(database), limit);
+  }
+
   @GetMapping("/top-questions")
   public CommentsResponse topQuestions(
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,

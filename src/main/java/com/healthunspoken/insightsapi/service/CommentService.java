@@ -28,6 +28,12 @@ public class CommentService {
     return byDate(yesterdayIst, database, limit);
   }
 
+  public CommentsResponse recent(LocalDate date, CommentDatabase database, int limit) {
+    int safeLimit = clampLimit(limit);
+    var rows = repository.findRecentByFetchedDate(date, database, safeLimit);
+    return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
+  }
+
   public CommentsResponse topQuestions(LocalDate date, CommentDatabase database, int limit) {
     int safeLimit = clampLimit(limit);
     var rows = repository.findTopQuestionCandidates(date, database, safeLimit);
