@@ -6,7 +6,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -72,7 +74,7 @@ public class CommentQueryRepository {
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
     List<String> databases = databasesFor(database);
-    int perDatabaseLimit = Math.max(1, limit);
+    int candidateLimit = Math.max(limit, Math.min(limit * 10, 500));
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
@@ -81,17 +83,40 @@ public class CommentQueryRepository {
               databaseName,
               startUtc,
               endUtc,
-              perDatabaseLimit,
+              candidateLimit,
               QuestionFilter.RELEVANT_HEALTH_QUESTIONS,
               SortMode.RECENT));
     }
 
-    return rows.stream()
-        .sorted(
-            (left, right) ->
-                nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
-        .limit(limit)
-        .toList();
+    List<CommentRow> recentRows =
+        rows.stream()
+            .sorted(
+                (left, right) ->
+                    nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
+            .toList();
+
+    return diversifyByVideo(recentRows, limit, 3);
+  }
+
+  private List<CommentRow> diversifyByVideo(List<CommentRow> rows, int limit, int maxPerVideo) {
+    Map<String, Integer> videoCounts = new HashMap<>();
+    List<CommentRow> selected = new ArrayList<>();
+
+    for (CommentRow row : rows) {
+      String videoKey = row.databaseName() + ":" + row.videoId();
+      int count = videoCounts.getOrDefault(videoKey, 0);
+      if (count >= maxPerVideo) {
+        continue;
+      }
+
+      selected.add(row);
+      videoCounts.put(videoKey, count + 1);
+      if (selected.size() >= limit) {
+        return selected;
+      }
+    }
+
+    return selected;
   }
 
   public List<CommentRow> findTopQuestionCandidates(
@@ -112,7 +137,9 @@ public class CommentQueryRepository {
     }
 
     return rows.stream()
-        .sorted((left, right) -> nullSafeLong(right.likeCount()).compareTo(nullSafeLong(left.likeCount())))
+        .sorted(
+            (left, right) ->
+                nullSafeLong(right.likeCount()).compareTo(nullSafeLong(left.likeCount())))
         .limit(limit)
         .toList();
   }
@@ -238,7 +265,7 @@ public class CommentQueryRepository {
           """
           and c.text like '%?%'
           and char_length(c.text) between 40 and 350
-          and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course|google it|blueprint|one off guide|minus the hard work|heard some .*things|got .*results|kudos|lovely video|forgive me|apologies for|subliminal|what lockdown|fearmongery|how can i follow'
+          and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course|google it|blueprint|one off guide|minus the hard work|heard some .*things|got .*results|kudos|lovely video|forgive me|apologies for|subliminal|what lockdown|fearmongery|how can i follow|can you do a .*video|do a visio|does your .*program|life mastery|cbt techniques|checking if it worked|step4|how did it go|hope it was well|stay strong|you are not alone|brother just seeing|how you keeping|keep your chin up|pray you|what are nlp movements|or is this nlp|tongue on top|dark chocolate|long hum|chewing gum|physical for a high school teen|going back to irl school|flight in less than|vacation because of anxiety|what.s your diet like|do you eat a lot'
           and lower(c.text) not regexp 'population control|they hide|hidden cure|cancer industry|big pharma|government agenda|fake science|conspiracy'
           and lower(c.text) regexp 'pain|symptom|disease|diagnos|treatment|medicine|test|report|normal|safe|dangerous|worry|cause|cure|permanent|come back|eat|food|diet|protein|sugar|bp|thyroid|cholesterol|cancer|heart|liver|kidney|stomach|gut|hair|skin|teeth|tongue|sleep|tired|fatigue|anxiety|stress|pregnancy|period|urine|sweat|vomit|gas|acidity|constipation'
           """;
