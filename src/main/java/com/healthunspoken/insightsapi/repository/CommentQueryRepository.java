@@ -6,8 +6,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -74,7 +76,7 @@ public class CommentQueryRepository {
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
     List<String> databases = databasesFor(database);
-    int candidateLimit = Math.max(limit, Math.min(limit * 10, 500));
+    int candidateLimit = Math.max(limit, Math.min(limit * 20, 1000));
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
@@ -88,21 +90,47 @@ public class CommentQueryRepository {
               SortMode.RECENT));
     }
 
-    List<CommentRow> recentRows =
+    List<CommentRow> rankedRows =
         rows.stream()
             .sorted(
-                (left, right) ->
-                    nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
+                Comparator.comparingInt(this::questionQualityScore)
+                    .reversed()
+                    .thenComparing(
+                        CommentRow::fetchedAtUtc,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
 
-    return diversifyByVideo(recentRows, limit, 3);
+    return diversifyByVideoAndChannel(rankedRows, limit, 3, 10);
   }
 
-  private List<CommentRow> diversifyByVideo(List<CommentRow> rows, int limit, int maxPerVideo) {
+  private List<CommentRow> diversifyByVideoAndChannel(
+      List<CommentRow> rows, int limit, int maxPerVideo, int maxPerChannel) {
     Map<String, Integer> videoCounts = new HashMap<>();
+    Map<String, Integer> channelCounts = new HashMap<>();
     List<CommentRow> selected = new ArrayList<>();
 
     for (CommentRow row : rows) {
+      String videoKey = row.databaseName() + ":" + row.videoId();
+      String channelKey = row.databaseName() + ":" + row.channelId();
+      int count = videoCounts.getOrDefault(videoKey, 0);
+      int channelCount = channelCounts.getOrDefault(channelKey, 0);
+      if (count >= maxPerVideo || channelCount >= maxPerChannel) {
+        continue;
+      }
+
+      selected.add(row);
+      videoCounts.put(videoKey, count + 1);
+      channelCounts.put(channelKey, channelCount + 1);
+      if (selected.size() >= limit) {
+        return selected;
+      }
+    }
+
+    for (CommentRow row : rows) {
+      if (selected.contains(row)) {
+        continue;
+      }
+
       String videoKey = row.databaseName() + ":" + row.videoId();
       int count = videoCounts.getOrDefault(videoKey, 0);
       if (count >= maxPerVideo) {
@@ -117,6 +145,33 @@ public class CommentQueryRepository {
     }
 
     return selected;
+  }
+
+  private int questionQualityScore(CommentRow row) {
+    String text = row.text() == null ? "" : row.text().toLowerCase(Locale.ROOT);
+    int score = 0;
+
+    score += scoreMatches(text, 5, "cancer", "heart attack", "stroke", "diagnosed", "screening");
+    score += scoreMatches(text, 4, "safe", "dangerous", "risk", "side effect", "checked", "doctor");
+    score += scoreMatches(text, 3, "pain", "symptom", "treatment", "medicine", "test", "report");
+    score += scoreMatches(text, 2, "should i", "am i", "can i", "how often", "how long", "is it normal");
+    score += Math.min(5, nullSafeLong(row.likeCount()).intValue());
+
+    score -= scoreMatches(text, 4, "😂", "🤣", "lol", "joke", "funny", "how do you know dr");
+    score -= scoreMatches(text, 3, "looks like", "taste like", "kettle chips", "pork skins");
+    score -= scoreMatches(text, 2, "follow", "subscribe", "video", "program", "course");
+
+    return score;
+  }
+
+  private int scoreMatches(String text, int weight, String... terms) {
+    int score = 0;
+    for (String term : terms) {
+      if (text.contains(term)) {
+        score += weight;
+      }
+    }
+    return score;
   }
 
   public List<CommentRow> findTopQuestionCandidates(
