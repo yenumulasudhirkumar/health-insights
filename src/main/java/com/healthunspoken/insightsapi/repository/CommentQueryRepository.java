@@ -319,6 +319,7 @@ public class CommentQueryRepository {
       case RELEVANT_HEALTH_QUESTIONS ->
           """
           and c.text like '%?%'
+          and c.parent_id is null
           and char_length(c.text) between 40 and 350
           and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course|google it|blueprint|one off guide|minus the hard work|heard some .*things|got .*results|kudos|lovely video|forgive me|apologies for|subliminal|what lockdown|fearmongery|how can i follow|can you do a .*video|do a visio|does your .*program|life mastery|cbt techniques|checking if it worked|step4|how did it go|hope it was well|stay strong|you are not alone|brother just seeing|how you keeping|keep your chin up|pray you|what are nlp movements|or is this nlp|tongue on top|dark chocolate|long hum|chewing gum|physical for a high school teen|going back to irl school|flight in less than|vacation because of anxiety|what.s your diet like|do you eat a lot'
           and lower(c.text) not regexp 'population control|they hide|hidden cure|cancer industry|big pharma|government agenda|fake science|conspiracy'
