@@ -157,9 +157,36 @@ public class CommentQueryRepository {
     score += scoreMatches(text, 2, "should i", "am i", "can i", "how often", "how long", "is it normal");
     score += Math.min(5, nullSafeLong(row.likeCount()).intValue());
 
-    score -= scoreMatches(text, 4, "😂", "🤣", "lol", "joke", "funny", "how do you know dr");
-    score -= scoreMatches(text, 3, "looks like", "taste like", "kettle chips", "pork skins");
-    score -= scoreMatches(text, 2, "follow", "subscribe", "video", "program", "course");
+    score -=
+        scoreMatches(
+            text,
+            6,
+            "😂",
+            "🤣",
+            "lol",
+            "hahaha",
+            "joke",
+            "funny",
+            "too funny",
+            "what did it cost",
+            "how do you know dr",
+            "just here for the free medical advice");
+    score -= scoreMatches(text, 4, "looks like", "taste like", "kettle chips", "pork skins", "sea monster");
+    score -=
+        scoreMatches(
+            text,
+            3,
+            "follow",
+            "subscribe",
+            "video",
+            "program",
+            "course",
+            "doctor shortage",
+            "united healthcare",
+            "insurance",
+            "government",
+            "getting paid",
+            "actor");
 
     return score;
   }
@@ -322,6 +349,8 @@ public class CommentQueryRepository {
           and c.parent_id is null
           and char_length(c.text) between 40 and 350
           and lower(c.text) not regexp 'thanks doctor|thank you doctor|great video|nice video|please reply|subscribe|whatsapp|telegram|link please|where can i buy|buy from|price|first comment|love you|sense of humor|learned so much|wish i could afford|hire you|pay from|http|www\\.|\\.com|click here|course|google it|blueprint|one off guide|minus the hard work|heard some .*things|got .*results|kudos|lovely video|forgive me|apologies for|subliminal|what lockdown|fearmongery|how can i follow|can you do a .*video|do a visio|does your .*program|life mastery|cbt techniques|checking if it worked|step4|how did it go|hope it was well|stay strong|you are not alone|brother just seeing|how you keeping|keep your chin up|pray you|what are nlp movements|or is this nlp|tongue on top|dark chocolate|long hum|chewing gum|physical for a high school teen|going back to irl school|flight in less than|vacation because of anxiety|what.s your diet like|do you eat a lot'
+          and lower(c.text) not regexp 'haha|hahaha|lol|too funny|just a thought|brutal, pitch-perfect|so good|grandpa joe|medieval monk|sea monster|free medical advice|what did it cost|just here for|is any of this gonna be on the test|by my calculations|super cancer|monsters|rascals|wtf|fucked|asinin|actor|house being|texaco mike|what will they think of next|break up big medicine'
+          and lower(c.text) not regexp 'doctor shortage|medical profession|united healthcare|\\buhc\\b|epic|insurance|government|copay|residency|specialty|specialists|family medicine|sleep medicine doctors|emergency medicine doctors|how much .* doctors make|getting paid|paid so much|surgeon general|data breach|state medical license board|rich kid is gonna be a doctor|children of the richest'
           and lower(c.text) not regexp 'population control|they hide|hidden cure|cancer industry|big pharma|government agenda|fake science|conspiracy'
           and lower(c.text) regexp 'pain|symptom|disease|diagnos|treatment|medicine|test|report|normal|safe|dangerous|worry|cause|cure|permanent|come back|eat|food|diet|protein|sugar|bp|thyroid|cholesterol|cancer|heart|liver|kidney|stomach|gut|hair|skin|teeth|tongue|sleep|tired|fatigue|anxiety|stress|pregnancy|period|urine|sweat|vomit|gas|acidity|constipation'
           """;
