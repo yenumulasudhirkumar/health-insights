@@ -9,6 +9,7 @@ public record CommentRow(
     String videoTitle,
     String channelId,
     String channelTitle,
+    String authorDisplayName,
     String text,
     Long likeCount,
     String publishedAt,
