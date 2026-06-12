@@ -26,24 +26,10 @@ jobs:
 
   deploy:
     name: Deploy to VPS
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - health-insights-api
     needs: test
-    env:
-      VPS_HOST: ${{ secrets.VPS_HOST }}
-      VPS_USER: ${{ secrets.VPS_USER }}
-      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
     steps:
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/health-insights-deploy
-          chmod 600 ~/.ssh/health-insights-deploy
-          ssh-keyscan -T 20 -p "$VPS_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts || true
-
       - name: Deploy
-        run: |
-          ssh -i ~/.ssh/health-insights-deploy \
-            -o StrictHostKeyChecking=accept-new \
-            -p "$VPS_PORT" \
-            "$VPS_USER@$VPS_HOST" \
-            "/root/deploy-health-insights-api.sh"
+        run: /root/deploy-health-insights-api.sh
