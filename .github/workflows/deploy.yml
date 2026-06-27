@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: health-insights-api-deploy
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Test
