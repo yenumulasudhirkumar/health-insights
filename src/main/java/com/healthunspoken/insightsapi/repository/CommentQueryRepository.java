@@ -1,7 +1,9 @@
 package com.healthunspoken.insightsapi.repository;
 
 import com.healthunspoken.insightsapi.dto.CommentDatabase;
+import com.healthunspoken.insightsapi.dto.CommentLanguage;
 import com.healthunspoken.insightsapi.dto.CommentRow;
+import com.healthunspoken.insightsapi.service.LanguageDetector;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -19,24 +21,28 @@ import org.springframework.stereotype.Repository;
 public class CommentQueryRepository {
 
   private final JdbcTemplate jdbcTemplate;
+  private final LanguageDetector languageDetector;
   private final String mainDatabase;
   private final String healthDatabase;
 
   public CommentQueryRepository(
       JdbcTemplate jdbcTemplate,
+      LanguageDetector languageDetector,
       @Value("${insights.mysql.main-database}") String mainDatabase,
       @Value("${insights.mysql.health-database}") String healthDatabase) {
     this.jdbcTemplate = jdbcTemplate;
+    this.languageDetector = languageDetector;
     this.mainDatabase = mainDatabase;
     this.healthDatabase = healthDatabase;
   }
 
-  public List<CommentRow> findByFetchedDate(LocalDate dateIst, CommentDatabase database, int limit) {
+  public List<CommentRow> findByFetchedDate(
+      LocalDate dateIst, CommentDatabase database, CommentLanguage language, int limit) {
     LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
     List<String> databases = databasesFor(database);
-    int perDatabaseLimit = Math.max(1, limit);
+    int perDatabaseLimit = queryLimitForLanguage(language, limit);
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
@@ -45,17 +51,19 @@ public class CommentQueryRepository {
     }
 
     return rows.stream()
+        .filter(row -> language.matches(row.detectedLanguage()))
         .sorted((left, right) -> nullSafeLong(right.likeCount()).compareTo(nullSafeLong(left.likeCount())))
         .limit(limit)
         .toList();
   }
 
-  public List<CommentRow> findRecentByFetchedDate(LocalDate dateIst, CommentDatabase database, int limit) {
+  public List<CommentRow> findRecentByFetchedDate(
+      LocalDate dateIst, CommentDatabase database, CommentLanguage language, int limit) {
     LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
     List<String> databases = databasesFor(database);
-    int perDatabaseLimit = Math.max(1, limit);
+    int perDatabaseLimit = queryLimitForLanguage(language, limit);
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
@@ -63,6 +71,7 @@ public class CommentQueryRepository {
     }
 
     return rows.stream()
+        .filter(row -> language.matches(row.detectedLanguage()))
         .sorted(
             (left, right) ->
                 nullSafeDate(right.fetchedAtUtc()).compareTo(nullSafeDate(left.fetchedAtUtc())))
@@ -71,12 +80,12 @@ public class CommentQueryRepository {
   }
 
   public List<CommentRow> findRelevantHealthQuestionsByFetchedDate(
-      LocalDate dateIst, CommentDatabase database, int limit) {
+      LocalDate dateIst, CommentDatabase database, CommentLanguage language, int limit) {
     LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
     List<String> databases = databasesFor(database);
-    int candidateLimit = Math.max(limit, Math.min(limit * 20, 1000));
+    int candidateLimit = language == CommentLanguage.ALL ? Math.max(limit, Math.min(limit * 20, 1000)) : 2000;
     List<CommentRow> rows = new ArrayList<>();
 
     for (String databaseName : databases) {
@@ -92,6 +101,7 @@ public class CommentQueryRepository {
 
     List<CommentRow> rankedRows =
         rows.stream()
+            .filter(row -> language.matches(row.detectedLanguage()))
             .sorted(
                 Comparator.comparingInt(this::questionQualityScore)
                     .reversed()
@@ -200,7 +210,7 @@ public class CommentQueryRepository {
   }
 
   public List<CommentRow> findTopQuestionCandidates(
-      LocalDate dateIst, CommentDatabase database, int limit) {
+      LocalDate dateIst, CommentDatabase database, CommentLanguage language, int limit) {
     LocalDateTime startUtc = dateIst.atStartOfDay().minusHours(5).minusMinutes(30);
     LocalDateTime endUtc = dateIst.plusDays(1).atStartOfDay().minusHours(5).minusMinutes(30);
 
@@ -211,12 +221,13 @@ public class CommentQueryRepository {
               databaseName,
               startUtc,
               endUtc,
-              Math.max(100, limit),
+              language == CommentLanguage.ALL ? Math.max(100, limit) : 1000,
               QuestionFilter.QUESTION_CANDIDATES,
               SortMode.TOP_LIKED));
     }
 
     return rows.stream()
+        .filter(row -> language.matches(row.detectedLanguage()))
         .sorted(
             (left, right) ->
                 nullSafeLong(right.likeCount()).compareTo(nullSafeLong(left.likeCount())))
@@ -295,6 +306,7 @@ public class CommentQueryRepository {
                 rs.getString("channel_title"),
                 rs.getString("author_display_name"),
                 rs.getString("text"),
+                languageDetector.detect(rs.getString("text")),
                 rs.getObject("like_count", Long.class),
                 rs.getString("published_at"),
                 rs.getObject("fetched_at", LocalDateTime.class),
@@ -318,6 +330,13 @@ public class CommentQueryRepository {
       throw new IllegalArgumentException("Unsafe database identifier");
     }
     return "`" + identifier + "`";
+  }
+
+  private int queryLimitForLanguage(CommentLanguage language, int limit) {
+    if (language == CommentLanguage.ALL) {
+      return Math.max(1, limit);
+    }
+    return Math.max(500, limit * 20);
   }
 
   private Long nullSafeLong(Long value) {

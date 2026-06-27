@@ -11,6 +11,7 @@ public record CommentRow(
     String channelTitle,
     String authorDisplayName,
     String text,
+    String detectedLanguage,
     Long likeCount,
     String publishedAt,
     LocalDateTime fetchedAtUtc,

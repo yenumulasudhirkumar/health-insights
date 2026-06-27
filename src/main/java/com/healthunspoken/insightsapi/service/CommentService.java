@@ -1,6 +1,7 @@
 package com.healthunspoken.insightsapi.service;
 
 import com.healthunspoken.insightsapi.dto.CommentDatabase;
+import com.healthunspoken.insightsapi.dto.CommentLanguage;
 import com.healthunspoken.insightsapi.dto.CommentsResponse;
 import com.healthunspoken.insightsapi.repository.CommentQueryRepository;
 import java.time.LocalDate;
@@ -17,32 +18,33 @@ public class CommentService {
     this.repository = repository;
   }
 
-  public CommentsResponse byDate(LocalDate date, CommentDatabase database, int limit) {
+  public CommentsResponse byDate(LocalDate date, CommentDatabase database, CommentLanguage language, int limit) {
     int safeLimit = clampLimit(limit);
-    var rows = repository.findByFetchedDate(date, database, safeLimit);
+    var rows = repository.findByFetchedDate(date, database, language, safeLimit);
     return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
   }
 
-  public CommentsResponse yesterday(CommentDatabase database, int limit) {
+  public CommentsResponse yesterday(CommentDatabase database, CommentLanguage language, int limit) {
     LocalDate yesterdayIst = LocalDate.now(IST).minusDays(1);
-    return byDate(yesterdayIst, database, limit);
+    return byDate(yesterdayIst, database, language, limit);
   }
 
-  public CommentsResponse recent(LocalDate date, CommentDatabase database, int limit) {
+  public CommentsResponse recent(LocalDate date, CommentDatabase database, CommentLanguage language, int limit) {
     int safeLimit = clampLimit(limit);
-    var rows = repository.findRecentByFetchedDate(date, database, safeLimit);
+    var rows = repository.findRecentByFetchedDate(date, database, language, safeLimit);
     return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
   }
 
-  public CommentsResponse relevantQuestions(LocalDate date, CommentDatabase database, int limit) {
+  public CommentsResponse relevantQuestions(
+      LocalDate date, CommentDatabase database, CommentLanguage language, int limit) {
     int safeLimit = clampLimit(limit);
-    var rows = repository.findRelevantHealthQuestionsByFetchedDate(date, database, safeLimit);
+    var rows = repository.findRelevantHealthQuestionsByFetchedDate(date, database, language, safeLimit);
     return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
   }
 
-  public CommentsResponse topQuestions(LocalDate date, CommentDatabase database, int limit) {
+  public CommentsResponse topQuestions(LocalDate date, CommentDatabase database, CommentLanguage language, int limit) {
     int safeLimit = clampLimit(limit);
-    var rows = repository.findTopQuestionCandidates(date, database, safeLimit);
+    var rows = repository.findTopQuestionCandidates(date, database, language, safeLimit);
     return new CommentsResponse(date, database, safeLimit, rows.size(), rows);
   }
 
